@@ -1,1 +1,2 @@
 -e git+https://github.com/openskynetwork/opensky-api.git#egg=opensky-api&subdirectory=python
+pillow
