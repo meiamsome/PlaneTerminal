@@ -3,7 +3,7 @@ from __future__ import print_function
 import subprocess
 import sys
 
-box_characters = {
+BOX_CHARS = {
     "t": u"\u2500",
     "b": u"\u2500",
     "l": u"\u2502",
@@ -16,38 +16,55 @@ box_characters = {
 
 
 class Terminal(object):
-    def get_size(self, ):
+    def __init__(self, cache=False, *args, **kwargs):
+        super(Terminal, self).__init__(*args, **kwargs)
+        self.cache = cache
+        self.data = ""
+
+    def hide_cursor(self):
+        self.send_data("\x1b[?25l")
+
+    def get_size(self):
         coords = subprocess.check_output(['stty', 'size']).decode().split()
         return [int(x) for x in coords]
 
-    def clear_screen(self, ):
-        print("\x1b[3J\x1b[2J", end="")
+    def clear_screen(self):
+        self.send_data("\x1b[3J\x1b[2J")
 
-    def draw_rectangle(self, x1, y1, x2, y2, clear_center=True, box=box_characters, bold=set()):
+    def draw_rectangle(self,
+                       coords,
+                       clear_center=True,
+                       box=BOX_CHARS,
+                       bold=set()):
         for side in bold:
             box = {k: chr(ord(v) + (k.find(side) + 1))
                    for k, v in box.items()}
         output = "\x1b[{y1};{x1}f{box[tl]}"
-        output += "{box[t]}" * (x2 - x1 - 1)
+        output += "{box[t]}" * (coords[2] - coords[0] - 1)
         output += "{box[tr]}"
-        for y in range(y1 + 1, y2):
-            output += "\x1b[{y};{{x1}}f{{box[l]}}".format(y=y)
+        for ycoord in range(coords[1] + 1, coords[3]):
+            output += "\x1b[{y};{{x1}}f{{box[l]}}".format(y=ycoord)
             if clear_center:
-                output += " " * (x2 - x1 - 1)
-            output += "\x1b[{y};{{x2}}f{{box[r]}}".format(y=y)
+                output += " " * (coords[2] - coords[0] - 1)
+            output += "\x1b[{y};{{x2}}f{{box[r]}}".format(y=ycoord)
         output += "\x1b[{y2};{x1}f{box[bl]}"
-        output += "{box[b]}" * (x2 - x1 - 1)
+        output += "{box[b]}" * (coords[2] - coords[0] - 1)
         output += "{box[br]}"
 
-        print(output.format(x1=x1, y1=y1, x2=x2, y2=y2, box=box), end="")
+        print(output.format(x1=coords[0], y1=coords[1],
+                            x2=coords[2], y2=coords[3], box=box), end="")
 
-        # print("\x1b[{};{}f{box[tl]}{}{box[tr]}".format(y1, x1,
-        #                                                box['t'] * (x2 - x1 - 1), box=box), end="")
-        # for y in range(y1 + 1, y2):
-        #     print("\x1b[{};{}f{box[l]}{}{box[r]}".format(
-        #         y, x1, " " * (x2 - x1 - 1), box=box), end="")
-        # print("\x1b[{};{}f{box[bl]}{}{box[br]}".format(y2, x1,
-        # box['b'] * (x2 - x1 - 1), box=box), end="")
+    def move_to(self, x, y):
+        self.send_data("\x1b[{};{}f".format(y, x))
+
+    def send_data(self, data):
+        if self.cache:
+            self.data += data
+        else:
+            print(self.data, end="")
 
     def flush(self):
+        if self.cache:
+            print(self.data, end="")
         sys.stdout.flush()
+        self.data = ""
